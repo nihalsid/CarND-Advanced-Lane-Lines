@@ -10,9 +10,11 @@ USE_SAVED_CALIB = True
 
 
 def camera_calibration(path_to_chessboards):
+	# camera calibration by using chessboards
 	imagepoints = []
 	objpoints = []
 	image_size = None
+	# obj points lie on flat plane with z = 0
 	objp = np.zeros((9*6, 3), np.float32)
 	objp[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1,2);
 	
@@ -23,42 +25,49 @@ def camera_calibration(path_to_chessboards):
 		gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
 		image_size = gray.shape[::-1]
 		ret, corners = cv2.findChessboardCorners(gray, (9,6), None)
+		# add to collection of imagepoints and objpoints if pattern found
 		if ret == True:
 			imagepoints.append(corners)
 			objpoints.append(objp)
 			image_with_corners = cv2.drawChessboardCorners(image, (9,6), corners, ret)
 			cv2.imwrite(os.path.join('save_files', os.path.basename(fname)), image_with_corners)
-
+	# return the calib matrix and dist correction coefficients
 	ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imagepoints, image_size, None, None)
 	return mtx, dist
 
 
 def undistort(image, mtx, dist):
+	# undistort an image using matrix and coefficients of distortion
 	return cv2.undistort(image, mtx, dist, None, mtx)
 
 
 def create_binary_image(image, s_thresh=(180, 255), sx_thresh=(15, 100)):
+	# creates binary image based on thresholds on s channel and the sobel derivative of l channel
 	img = np.copy(image)
 	hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
 	l_channel = hls[:,:,1]
 	s_channel = hls[:,:,2]
+	# derivative
 	sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0)
 	abs_sobelx = np.absolute(sobelx) 
 	scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
 	sxbinary = np.zeros_like(scaled_sobel)
 	sxbinary[(scaled_sobel >= sx_thresh[0]) & (scaled_sobel <= sx_thresh[1])] = 1
+	# s channel thresholding 
 	s_binary = np.zeros_like(s_channel)
 	s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
 	color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
 	binary = np.zeros_like(s_channel)
+	# concatenate
 	binary[(sxbinary != 0) | (s_binary!=0)] = 255
 	return binary
 
 
 def unwarp_image(image):
+	# do perspective transformation
 	src = np.float32([[600, 447], [680, 447], [270, 673], [1037, 673]])
 	dst = np.float32([[300, 0], [950, 0], [300, 720], [950, 720]])
-	# 640 gets mapped to 625
+	# 640 gets mapped to 625 - which will be used in distance from center calculation
 	img_size = (image.shape[1], image.shape[0])
 	M = cv2.getPerspectiveTransform(src, dst)
 	unwarped = cv2.warpPerspective(image, M, img_size, flags=cv2.INTER_NEAREST)
@@ -66,6 +75,7 @@ def unwarp_image(image):
 
 
 def warp_image(image):
+	# reverse of unwarp image
 	dst = np.float32([[600, 447], [680, 447], [270, 673], [1037, 673]])
 	src = np.float32([[300, 0], [950, 0], [300, 720], [950, 720]])
 	img_size = (image.shape[1], image.shape[0])
@@ -75,11 +85,15 @@ def warp_image(image):
 
 
 def get_annotated_frame(original_frame, thresholded_frame):
+	# this function annotates a frame with lane region, curvature and distance from center
+
+	# use histogram peaks to find the lane lines starting points
 	histogram = np.sum(thresholded_frame[thresholded_frame.shape[0]//2:,:], axis=0)
 	midpoint = np.int(histogram.shape[0]//2)
 
 	leftx_base = np.argmax(histogram[:midpoint])
 	rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+	# use sliding windows to follow the lane lines
 	nwindows = 9
 	window_height = np.int(thresholded_frame.shape[0]//nwindows)
 	nonzero = thresholded_frame.nonzero()
@@ -91,6 +105,7 @@ def get_annotated_frame(original_frame, thresholded_frame):
 	minpix = 50
 	left_lane_inds = []
 	right_lane_inds = []
+	# find left lane indices and right lane indices using sliding windows
 	for window in range(nwindows):
 		win_y_low = thresholded_frame.shape[0] - (window+1)*window_height
 		win_y_high = thresholded_frame.shape[0] - window*window_height
@@ -181,5 +196,4 @@ if __name__=='__main__':
 		
 	vidcap.release()
 	writer.release()
-	#cv2.imwrite("output_images/unwarped.jpg", out)
 	

@@ -19,7 +19,7 @@ The goals / steps of this project are the following:
 [image1]: ./output_images/undistorted_calibration1.jpg "Undistorted"
 [image2]: ./test_images/test1.jpg "Road Transformed"
 [image3]: ./output_images/color_binary.jpg "Binary Example"
-[image4]: ./output_images/perspective_test.jpg "Warp Example"
+[image4]: ./output_images/perpective_test.jpg "Warp Example"
 [image5]: ./output_images/color_fit_lines.jpg "Fit Visual"
 [image6]: ./output_images/example_output.jpg "Output"
 [video1]: ./project_video.mp4 "Video"
@@ -45,13 +45,16 @@ You're reading it!
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in function `camera_calibration()` of the the file `submission.py` (line 12 to 33).
+The code for this step is contained in function `camera_calibration()` of the the file `submission.py` (line 12 to 36).
 
 I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imagepoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
 
 I then used the output `objpoints` and `imagepoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
 
 ![alt text][image7]
+
+is corrected to 
+
 ![alt text][image1]
 
 ### Pipeline (single images)
@@ -65,13 +68,13 @@ is corrected to
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 40 through 55 in `submission.py`).  Here's an example of my output for this step.  
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines 44 through 63 in `submission.py`).  Here's an example of my output for this step.  
 
 ![alt text][image3]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `unwarp_image()`, which appears in lines 58 through 65 in the file `submission.py`.  The `unwarp_image()` function takes as inputs an image (`image`). I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform includes a function called `unwarp_image()`, which appears in lines 66 through 74 in the file `submission.py`.  The `unwarp_image()` function takes as inputs an image (`image`). I chose the hardcode the source and destination points in the following manner:
 
 ```python
 src = np.float32([[600, 447], [680, 447], [270, 673], [1037, 673]])
@@ -105,17 +108,17 @@ is warped to
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-In function `get_annotated_frame()` in `submission.py`, line 77 to 122, I use a histogram to get the start of the two lane lines by identifying peaks in the histogram. Then I use a sliding window moving upwards to identify where the lane lines lie. After collecting the points for left and right lane line via sliding window, I fit polynomials on both of them using `np.polyfit()` line 120 :
+In function `get_annotated_frame()` in `submission.py`, line 87 to 139, I use a histogram to get the start of the two lane lines by identifying peaks in the histogram. Then I use a sliding window moving upwards to identify where the lane lines lie. After collecting the points for left and right lane line via sliding window, I fit polynomials on both of them using `np.polyfit()` line 135 :
 
 ![alt text][image5]
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines 124 through 135 in my code in `submission.py`. For this I used the curvature formula discussed in the lecture and the pixel to meter conversions also discussed in the lectures.
+I did this in lines 141 through 153 in my code in `submission.py`. For this I used the curvature formula discussed in the lecture and the pixel to meter conversions also discussed in the lectures.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines 138 through 155 in my code in `submission.py` in the function `get_annotated_frame()`.  Here is an example of my result on a test image:
+I implemented this step in lines 164 through 169 in my code in `submission.py` in the function `get_annotated_frame()`.  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
