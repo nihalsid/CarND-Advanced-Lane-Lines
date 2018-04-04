@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import pickle
+from moviepy.editor import VideoFileClip
 
 USE_SAVED_CALIB = True
 
@@ -150,7 +151,6 @@ def get_annotated_frame(original_frame, thresholded_frame):
 	dist_from_center = abs((left_fit[0]*y_eval**2 + left_fit[1]*y_eval + left_fit[2] + right_fit[0]*y_eval**2 + right_fit[1]*y_eval + right_fit[2])/2 - 625)
 	dist_from_center = dist_from_center * xm_per_pix
 	curvature = (left_curverad + right_curverad) / 2
-	print(curvature, 'm', dist_from_center, 'm')
 
 	# Create an image to draw the lines on
 	warp_zero = np.zeros_like(thresholded_frame).astype(np.uint8)
@@ -170,7 +170,7 @@ def get_annotated_frame(original_frame, thresholded_frame):
 	cv2.putText(result,'Radius of Curvature: %.2fm'%curvature,(10,50), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
 	cv2.putText(result,'Distance from center: %.2fm'%dist_from_center,(10,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
 	return result
-		
+
 
 if __name__=='__main__':
 	if not USE_SAVED_CALIB:
@@ -179,21 +179,13 @@ if __name__=='__main__':
 		mtx = pickle.load(open("saved_cal/mtx.p", "rb"))
 		dist = pickle.load(open("saved_cal/dist.p", "rb"))
 	
-	# Define the codec and create VideoWriter object
-	writer = cv2.VideoWriter('project_output.avi', cv2.VideoWriter_fourcc(*'XVID'), 20.0, (1280,720))
-	vidcap = cv2.VideoCapture('project_video.mp4')
-	ret, frame = vidcap.read()
-	
-	while ret:
-		frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-		out = undistort(frame, mtx, dist)
-		out = create_binary_image(out)
-		out = unwarp_image(out)
-		out = get_annotated_frame(frame, out)
-		out = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
-		writer.write(out)
-		ret, frame = vidcap.read()
-		
-	vidcap.release()
-	writer.release()
-	
+	def process_frame(frame):
+		undistorted_frame = undistort(frame, mtx, dist)	
+		binarized_frame = create_binary_image(undistorted_frame)
+		unwarped_frame = unwarp_image(binarized_frame)
+		annotated_frame = get_annotated_frame(undistorted_frame, unwarped_frame)
+		return annotated_frame
+
+	clip = VideoFileClip("project_video.mp4")
+	processed_clip = clip.fl_image(process_frame)
+	processed_clip.write_videofile("project_output.mp4", audio=False)	
