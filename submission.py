@@ -42,32 +42,34 @@ def undistort(image, mtx, dist):
 	return cv2.undistort(image, mtx, dist, None, mtx)
 
 
-def create_binary_image(image, s_thresh=(180, 255), sx_thresh=(15, 100)):
+def create_binary_image(image, thres1=(220, 255), thres2=(190, 255)):
 	# creates binary image based on thresholds on s channel and the sobel derivative of l channel
+	# sobel was no contributing so much, therefore going with hls(l) and Lab(b) spaces for right and left lanes
 	img = np.copy(image)
-	hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
+	hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
 	l_channel = hls[:,:,1]
-	s_channel = hls[:,:,2]
-	# derivative
-	sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0)
-	abs_sobelx = np.absolute(sobelx) 
-	scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
-	sxbinary = np.zeros_like(scaled_sobel)
-	sxbinary[(scaled_sobel >= sx_thresh[0]) & (scaled_sobel <= sx_thresh[1])] = 1
-	# s channel thresholding 
-	s_binary = np.zeros_like(s_channel)
-	s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
-	color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
-	binary = np.zeros_like(s_channel)
+	l_channel = l_channel*(255/np.max(l_channel))
+	hls_output = np.zeros_like(l_channel)
+	hls_output[(l_channel > thres1[0]) & (l_channel <= thres1[1])] = 1
+	
+	lab = cv2.cvtColor(img, cv2.COLOR_RGB2Lab)
+	b_channel = lab[:,:,2]
+	if np.max(b_channel) > 175:
+		b_channel = b_channel*(255/np.max(b_channel))
+	lab_output = np.zeros_like(b_channel)
+	lab_output[((b_channel > thres2[0]) & (b_channel <= thres2[1]))] = 1
+
+	color_binary = np.dstack(( np.zeros_like(hls_output), hls_output, lab_output)) * 255
+	binary = np.zeros_like(hls_output)
 	# concatenate
-	binary[(sxbinary != 0) | (s_binary!=0)] = 255
+	binary[(hls_output != 0) | (lab_output!=0)] = 255
 	return binary
 
 
 def unwarp_image(image):
 	# do perspective transformation
-	src = np.float32([[600, 447], [680, 447], [270, 673], [1037, 673]])
-	dst = np.float32([[300, 0], [950, 0], [300, 720], [950, 720]])
+	src = np.float32([(575,464), (707,464), (258,682), (1049,682)])
+	dst = np.float32([(450,0), (830,0), (450,720), (830,720)])
 	# 640 gets mapped to 625 - which will be used in distance from center calculation
 	img_size = (image.shape[1], image.shape[0])
 	M = cv2.getPerspectiveTransform(src, dst)
@@ -77,33 +79,31 @@ def unwarp_image(image):
 
 def warp_image(image):
 	# reverse of unwarp image
-	dst = np.float32([[600, 447], [680, 447], [270, 673], [1037, 673]])
-	src = np.float32([[300, 0], [950, 0], [300, 720], [950, 720]])
+	dst = np.float32([(575,464), (707,464), (258,682), (1049,682)])
+	src = np.float32([(450,0), (830,0), (450,720), (830,720)])
 	img_size = (image.shape[1], image.shape[0])
 	M = cv2.getPerspectiveTransform(src, dst)
 	warped = cv2.warpPerspective(image, M, img_size, flags=cv2.INTER_NEAREST)
 	return warped
 
-
 def get_annotated_frame(original_frame, thresholded_frame):
 	# this function annotates a frame with lane region, curvature and distance from center
 
 	# use histogram peaks to find the lane lines starting points
-	histogram = np.sum(thresholded_frame[thresholded_frame.shape[0]//2:,:], axis=0)
+	histogram = np.sum(thresholded_frame[:,300:950], axis=0)
 	midpoint = np.int(histogram.shape[0]//2)
-
-	leftx_base = np.argmax(histogram[:midpoint])
-	rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+	leftx_base = 300 + np.argmax(histogram[:midpoint])
+	rightx_base = 300 + np.argmax(histogram[midpoint:]) + midpoint
 	# use sliding windows to follow the lane lines
-	nwindows = 9
+	nwindows = 8
 	window_height = np.int(thresholded_frame.shape[0]//nwindows)
 	nonzero = thresholded_frame.nonzero()
 	nonzeroy = np.array(nonzero[0])
 	nonzerox = np.array(nonzero[1])
 	leftx_current = leftx_base
 	rightx_current = rightx_base
-	margin = 100
-	minpix = 50
+	margin = 75
+	minpix = 20
 	left_lane_inds = []
 	right_lane_inds = []
 	# find left lane indices and right lane indices using sliding windows
@@ -169,6 +169,7 @@ def get_annotated_frame(original_frame, thresholded_frame):
 	result = cv2.addWeighted(original_frame, 1, newwarp, 0.3, 0)
 	cv2.putText(result,'Radius of Curvature: %.2fm'%curvature,(10,50), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
 	cv2.putText(result,'Distance from center: %.2fm'%dist_from_center,(10,100), cv2.FONT_HERSHEY_SIMPLEX, 1,(255,255,255),2,cv2.LINE_AA)
+	#result = np.vstack([top_frame, result])
 	return result
 
 
@@ -186,6 +187,6 @@ if __name__=='__main__':
 		annotated_frame = get_annotated_frame(undistorted_frame, unwarped_frame)
 		return annotated_frame
 
-	clip = VideoFileClip("project_video.mp4")
+	clip = VideoFileClip("project_video.mp4")#.subclip(40,42)
 	processed_clip = clip.fl_image(process_frame)
 	processed_clip.write_videofile("project_output.mp4", audio=False)	
